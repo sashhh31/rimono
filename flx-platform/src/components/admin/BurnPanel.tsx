@@ -20,7 +20,7 @@ interface Props {
   connectedWallet: string | null;
   walletProvider: any | null;
   isWrongNetwork: boolean;
-  recentAddresses: string[];
+  recentAddresses: string[] | any ;
   onBurnSuccess: () => void;
 }
 
@@ -82,7 +82,6 @@ export default function BurnPanel({ selectedChain, connectedWallet, walletProvid
         }
       }
     };
-
     checkBalance();
   }, [watchedTargetWallet, selectedChain, connectedWallet, walletProvider, isWrongNetwork, trigger]);
 
@@ -109,14 +108,18 @@ export default function BurnPanel({ selectedChain, connectedWallet, walletProvid
     // Second click - proceed with burn
     setIsBurning(true);
 
-    let txHash: string | undefined = undefined;
+    let txHash: any = undefined;
 
     try {
       // Perform Blockchain Transaction
       if (selectedChain === 'BSC') {
-        txHash = await burnBep20Tokens(walletProvider, data.targetWallet, parseFloat(data.amount));
+        txHash = await burnBep20Tokens(walletProvider, data.targetWallet, data.amount);
+        if (typeof txHash === 'object' && txHash?.hash) {
+          txHash = txHash.hash; // Extract actual hash
+        }
+        console.log(txHash)
       } else {
-        txHash = await burnTrc20Tokens(walletProvider, data.targetWallet, parseFloat(data.amount));
+        txHash = await burnTrc20Tokens(walletProvider, data.targetWallet, data.amount);
       }
 
       if (!txHash) {
@@ -144,7 +147,7 @@ export default function BurnPanel({ selectedChain, connectedWallet, walletProvid
       }
 
       toast({ 
-        variant: "success", 
+        variant: "default", 
         title: "Burn Successful", 
         description: `Recorded Tx: ${truncateAddress(txHash)}` 
       });

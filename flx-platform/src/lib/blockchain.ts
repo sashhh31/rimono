@@ -1,6 +1,6 @@
 // lib/blockchain.ts
 
-import { ethers, BrowserProvider, Contract, Signer, parseEther, formatEther, JsonRpcProvider } from 'ethers';
+import { ethers, BrowserProvider, Contract, Signer, parseEther, formatEther, JsonRpcProvider, Provider, JsonRpcSigner } from 'ethers';
 import TronWeb from 'tronweb' ; // Still import, even if using custom types/any
 import BEP20_ABI from '@/contracts/BEP20Token.json';
 import TRC20_ABI from '@/contracts/TRC20Token.json';
@@ -35,7 +35,7 @@ interface TronLinkProvider {
 
 // --- Configuration & Validation ---
 const NEXT_PUBLIC_BSC_RPC_URL = process.env.NEXT_PUBLIC_BSC_RPC_URL||"bsc-testnet-rpc.publicnode.com";
-const BEP20_ADDRESS = process.env.NEXT_PUBLIC_BEP20_CONTRACT_ADDRESS;
+const BEP20_ADDRESS:any = process.env.NEXT_PUBLIC_BEP20_CONTRACT_ADDRESS;
 const NEXT_PUBLIC_TRON_RPC_URL = process.env.NEXT_PUBLIC_TRON_RPC_URL;
 const TRC20_ADDRESS_BASE58 = process.env.NEXT_PUBLIC_TRC20_CONTRACT_ADDRESS;
 const NEXT_PUBLIC_TRONGRID_API_KEY = process.env.NEXT_PUBLIC_TRONGRID_API_KEY; // Optional but recommended
@@ -74,30 +74,28 @@ export function getEthersProvider(externalProvider?: any): BrowserProvider | nul
     return null;
 }
 
-/**
- * Gets the Ethers signer from a BrowserProvider.
- */
-export async function getEthersSigner(provider: BrowserProvider): Promise<Signer | null> {
-    if (!provider) {
-        console.error("Cannot get signer without a provider.");
+// Add a new function to get the signer
+export async function getEthersSigner(externalProvider?: any): Promise<JsonRpcSigner | null> {
+    const provider = getEthersProvider(externalProvider);
+    if (!provider) return null;
+    
+    try {
+        // This will trigger the wallet connection if not already connected
+        const signer = await provider.getSigner();
+        return signer;
+    } catch (error) {
+        console.error("Failed to get signer:", error);
         return null;
     }
-    try {
-        // Ensure provider is connected and has accounts - might prompt user if not already connected
-        // await provider.send('eth_requestAccounts', []); // Consider if needed here or handled earlier
-        return await provider.getSigner();
-    } catch (error) {
-        console.error("Error getting ethers signer:", error);
-        return null; // Return null on error (e.g., user rejection)
-    }
 }
+
 
 /**
  * Gets the TronLink provider object from window.tronLink if available and ready.
  */
 export function getTronLinkProvider(): TronLinkProvider | null {
      if (typeof window === 'undefined') return null; // Server-side guard    
-     const tronLink = window.tronLink as TronLinkProvider | undefined; // Cast for potential structure
+     const tronLink = (window as any).tronLink as TronLinkProvider | undefined; // Cast for potential structure
 
      if (!tronLink) {
         console.warn("TronLink (window.tronLink) not found.");
@@ -122,15 +120,15 @@ export function getTronLinkProvider(): TronLinkProvider | null {
 
     return tronLink; // Return the full TronLink object
 }
-
-// --- Contract Instances ---
-
 /**
  * Gets an instance of the BEP20 contract connected to a signer or provider.
  */
-export function getBep20Contract(signerOrProvider: Signer | ethers.Provider): Contract {
-    if (!signerOrProvider) throw new Error("Signer or Provider is required to instantiate BEP20 contract.");
-    return new Contract(BEP20_ADDRESS!, BEP20_ABI.abi, signerOrProvider);
+export function getBep20Contract(signerOrProvider: Signer | Provider) {
+    return new Contract(
+        BEP20_ADDRESS, 
+        BEP20_ABI.abi,
+        signerOrProvider
+    );
 }
 
 /**
@@ -154,29 +152,37 @@ export async function getTrc20Contract(tronWebInstance: TronWebInstance): Promis
 }
 
 // --- Blockchain Interaction Functions ---
-
+const provider = new BrowserProvider(window.ethereum);
 /**
  * Mints BEP-20 tokens. Requires a connected Signer.
  */
-export async function mintBep20Tokens(signer: Signer, recipient: string, amount: string): Promise<string> {
-    if (!signer) throw new Error("A connected Signer (wallet) is required for minting BEP-20 tokens.");
-    const contract = getBep20Contract(signer);
+// ... existing code ...
+export async function mintBep20Tokens(recipient:any,amount: number) {
     try {
-        const amountWei = parseEther(amount);
-        console.log(`Minting BEP20: To=${recipient}, Amount=${amountWei.toString()}`);
-        const tx = await contract.mint(recipient, amountWei);
-        console.log('BEP20 Mint Tx Sent:', tx.hash);
-        // Optional: Wait for 1 confirmation
-        // const receipt = await tx.wait(1);
-        // console.log('BEP20 Mint Tx Confirmed:', receipt?.hash);
-        return tx.hash;
-    } catch (error: any) {
-        console.error('BEP20 Minting Error:', error);
-        const message = error.shortMessage || error.message || 'BEP-20 minting failed';
-        throw new Error(message); // Throw cleaner error
+        // Ensure you have a signer from the wallet
+        const signer = await provider.getSigner();
+        console.log(BEP20_ADDRESS)
+        const contract = new Contract(BEP20_ADDRESS, BEP20_ABI.abi, signer);
+        
+        // Call mint function
+        const tx = await contract.mint(recipient,amount);
+        await tx.wait();
+        return tx;
+    } catch (error : any) {
+        if (error.message.includes("execution reverted")) {
+
+            console.error("Only the owner can mint tokens.")
+            error.message="Only the owner can mint tokens."
+        }
+        if (error.message.includes("user rejected action")) {
+            console.error("Minting process was canceled by the user.");
+            error.message = "You have canceled the minting process.";
+        }
+        
+        console.error(error)
+        throw error;
     }
 }
-
 /**
  * Mints TRC-20 tokens. Requires a ready TronWeb instance from TronLink.
  */
@@ -211,8 +217,11 @@ export async function mintTrc20Tokens(tronWebInstance: TronWebInstance, recipien
         return txID;
     } catch (error: any) {
         console.error('TRC20 Minting Error:', error);
-        // TronWeb errors might be strings or objects
-        const errorMessage = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+        let errorMessage = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+        if (typeof error === 'object' && error !== null && error.message && 
+            typeof error.message === 'string' && error.message.includes("does not exist")) {
+            errorMessage = "Only the owner can mint tokens.";
+        }
         throw new Error(errorMessage || 'TRC-20 minting failed');
     }
 }
@@ -221,22 +230,22 @@ export async function mintTrc20Tokens(tronWebInstance: TronWebInstance, recipien
 /**
  * Burns BEP-20 tokens from a target address. Requires allowance or special permission.
  */
-export async function burnBep20Tokens(signer: Signer, targetAddress: string, amount: string): Promise<string> {
-    if (!signer) throw new Error("A connected Signer (wallet) is required for burning BEP-20 tokens.");
-    const contract = getBep20Contract(signer);
+export async function burnBep20Tokens(sign: Signer, targetAddress: string, amount: string): Promise<string> {
+    if (!sign) throw new Error("A connected Signer (wallet) is required for burning BEP-20 tokens.");
+    const signer = await provider.getSigner();
+    const contract = new Contract(BEP20_ADDRESS, BEP20_ABI.abi, signer);
     try {
-        const amountWei = parseEther(amount);
-        console.log(`Burning BEP20: From=${targetAddress}, Amount=${amountWei.toString()}`);
-        // Check if burnFrom method exists before calling
-        if (typeof contract.burnFrom !== 'function') {
-             throw new Error("The 'burnFrom(address,uint256)' function is not available on this BEP20 contract instance. Check ABI/Contract.");
-        }
-        const tx = await contract.burnFrom(targetAddress, amountWei);
+        const tx = await contract.burnFrom(targetAddress, amount);
         console.log('BEP20 Burn Tx Sent:', tx.hash);
         return tx.hash;
     } catch (error: any) {
+        let message = error.shortMessage || error.message || 'BEP-20 burning failed';
+        if (error.message.includes("execution reverted")) {
+            
+            console.error("BEP20 Burning Error: Only the owner can burn tokens.")
+            message="Only the owner can burn tokens."
+        }
         console.error('BEP20 Burning Error:', error);
-        const message = error.shortMessage || error.message || 'BEP-20 burning failed';
         throw new Error(message);
     }
 }
@@ -258,12 +267,12 @@ export async function burnTrc20Tokens(tronWebInstance: TronWebInstance, targetAd
         console.log(`Burning TRC20: Target=${targetAddress}, RawAmount=${rawAmount} (Decimals: ${tokenDecimals})`);
 
         // --- IMPORTANT: Adjust method name 'burn' if your contract uses 'burnFrom' or similar ---
-        if (!contract.methods.burn) { // Adjust this line based on your contract's burn function name
+        if (!contract.methods.burnFrom) { // Adjust this line based on your contract's burn function name
             throw new Error("Contract ABI doesn't seem to have a 'burn(address,uint256)' function. Check ABI/Contract.");
         }
         // ---
 
-        const txID = await contract.methods.burn(targetAddress, rawAmount).send({ // Adjust method name if needed!
+        const txID = await contract.methods.burnFrom(targetAddress, rawAmount).send({ // Adjust method name if needed!
             feeLimit: 150_000_000, // Adjust fee limit
             callValue: 0,
             shouldPollResponse: false
@@ -276,35 +285,71 @@ export async function burnTrc20Tokens(tronWebInstance: TronWebInstance, targetAd
         return txID;
     } catch (error: any) {
         console.error('TRC20 Burning Error:', error);
-        const errorMessage = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+        let errorMessage = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+        
+        // Check if error is an object and has a message property before trying to access it
+        if (typeof error === 'object' && error !== null && error.message && 
+            typeof error.message === 'string' && error.message.includes("does not exist")) {
+            errorMessage = "Only the owner can burn tokens.";
+        }
+        
         throw new Error(errorMessage || 'TRC-20 burning failed');
     }
 }
 
 // --- Balance & Network Checks ---
-
-export async function getBep20Balance(provider: ethers.Provider, address: string): Promise<string> {
-     if (!provider) {
-         console.error("Provider required to fetch BEP20 balance.");
-         return "Error";
-     }
-    // Use a read-only provider instance if `provider` could be a signer
-    const readProvider = provider instanceof Signer ? provider.provider : provider;
-    if (!readProvider) {
-         console.error("Valid read-only provider could not be obtained for balance check.");
-         return "Error";
+export async function getBep20Balance(provider: any, address: string): Promise<string> {
+    if (!provider) {
+      console.error("Provider is null or undefined.");
+      return "Error";
     }
-    const contract = new Contract(BEP20_ADDRESS!, BEP20_ABI.abi, readProvider);
+    
+    // More detailed debugging
+    console.log("Provider type:", typeof provider);
+    console.log("Provider keys:", Object.keys(provider));
+    
+    // Try to get a valid provider instance
+    let readProvider;
+    
+    // Check if it's a Provider object
+    if (provider.getNetwork && typeof provider.getNetwork === 'function') {
+      console.log("Using direct provider");
+      readProvider = provider;
+    } 
+    // Check if it's a Signer with a provider
+    else if (provider.provider && typeof provider.provider.getNetwork === 'function') {
+      console.log("Using signer's provider");
+      readProvider = provider.provider;
+    }
+    // Check if it's ethers v6 Provider
+    else if (provider._network && provider.getBlock) {
+      console.log("Using ethers v6 provider");
+      readProvider = provider;
+    }
+    // Check if it's a Web3Provider from a wallet connection
+    else if (provider.getSigner && typeof provider.getSigner === 'function') {
+      console.log("Using Web3Provider");
+      readProvider = provider;
+    }
+    else {
+      console.error("Provider validation failed. Provider details:", provider);
+      return "Error";
+    }
+    
     try {
-        const balanceWei = await contract.balanceOf(address);
-        return formatEther(balanceWei);
+      console.log("Creating contract with address:", BEP20_ADDRESS);
+      const contract = new Contract(BEP20_ADDRESS!, BEP20_ABI.abi, readProvider);
+      console.log("Calling balanceOf for address:", address);
+      const balanceWei = await contract.balanceOf(address);
+      return formatEther(balanceWei);
     } catch (error: any) {
-        console.error(`Error fetching BEP20 balance for ${address}:`, error.message);
-        return "Error";
+      console.error(`Error fetching BEP20 balance for ${address}:`, error);
+      return "Error";
     }
-}
+  }
 
 export async function getTrc20Balance(tronWebInstance: TronWebInstance, address: string): Promise<string> {
+    console.log(tronWebInstance)
      if (!tronWebInstance) {
          console.error("TronWeb instance required to fetch TRC20 balance.");
          return "Error";

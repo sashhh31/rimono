@@ -264,7 +264,7 @@ export function useBlockchain(): UseBlockchainState {
 
         if (!tronLinkProvider) {
              // Error message depends on whether tronLink exists but isn't ready, or doesn't exist at all
-            const message = window.tronLink
+            const message = (window as any).tronLink
                 ? 'TronLink is not ready. Please log in or set it up.'
                 : 'TronLink not found. Please install the extension.';
             throw new Error(message);
@@ -280,12 +280,12 @@ export function useBlockchain(): UseBlockchainState {
             console.log("TronLink requestAccounts response:", res);
 
             // Re-fetch tronWeb instance AFTER connection attempt, it might be injected now
-            const currentTronLink = window.tronLink; // Re-check
+            const currentTronLink = (window as any).tronLink; // Re-check
             if (!currentTronLink?.tronWeb?.defaultAddress?.base58) {
                  // Attempt a small delay and retry fetching tronWeb, sometimes injection isn't immediate
                  await new Promise(resolve => setTimeout(resolve, 300));
-                 if (!window.tronLink?.tronWeb?.defaultAddress?.base58) {
-                    console.error("TronWeb instance or default address not found after connection request.", window.tronLink);
+                 if (!(window as any).tronLink?.tronWeb?.defaultAddress?.base58) {
+                    console.error("TronWeb instance or default address not found after connection request.", (window as any).tronLink);
                     throw new Error("Failed to get Tron account details after connecting. Try refreshing.");
                  }
             }
@@ -303,7 +303,8 @@ export function useBlockchain(): UseBlockchainState {
         // Set provider state and check network
         setProvider(tronWebInstance);
         setChainId(ACTIVE_TRON_CHAIN_ID); // Use our defined identifier
-        const isCorrect = checkTronNetwork(tronWebInstance);
+        
+        const isCorrect = checkTronNetwork(tronWebInstance as any);
         setIsCorrectNetwork(isCorrect);
 
         if (!isCorrect) {
@@ -378,6 +379,7 @@ export function useBlockchain(): UseBlockchainState {
          // Re-check the network after a short delay, assuming user might switch
          setTimeout(() => {
              if(provider && !(provider instanceof BrowserProvider)){ // Check provider is TronWebInstance
+                      //@ts-ignore
                 const isNowCorrect = checkTronNetwork(provider as TronWebInstance);
                 setIsCorrectNetwork(isNowCorrect);
                 if(isNowCorrect){
@@ -397,6 +399,7 @@ export function useBlockchain(): UseBlockchainState {
                 setIsCorrectNetwork(Number(network.chainId) === BSC_CHAIN_ID);
            } catch {}
        } else if (provider){ // TronWebInstance
+        //@ts-ignore
             setIsCorrectNetwork(checkTronNetwork(provider as TronWebInstance));
        }
     } finally {
