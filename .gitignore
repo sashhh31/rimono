@@ -53,3 +53,4 @@ dist/
 # IDE configs (optional, for JetBrains or other IDE users)
 .idea/
 *.iml
+.vercel

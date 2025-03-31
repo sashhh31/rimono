@@ -150,9 +150,6 @@ export default function DashboardPage() {
                 connectedWallet={connectedWallet}
                 walletProvider={walletProvider}
                 isWrongNetwork={isWrongNetwork}
-                recentAddresses={transactions.map(tx => tx.recipient)
-                                        .filter((addr, index, self) => addr && self.indexOf(addr) === index)
-                                        .slice(0, 10)}
                 onBurnSuccess={refreshTransactions}
               />
             </CardContent>

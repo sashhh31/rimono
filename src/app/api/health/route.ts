@@ -6,7 +6,7 @@ import sgMail from '@sendgrid/mail';
 
 // Configuration (ensure these are set in your environment)
 const NEXT_PUBLIC_BSC_RPC_URL = process.env.NEXT_PUBLIC_BSC_RPC_URL||"bsc-testnet-rpc.publicnode.com";
-const NEXT_PUBLIC_TRON_RPC_URL = process.env.NEXT_PUBLIC_TRON_RPC_URL; // e.g., https://api.trongrid.io
+const NEXT_PUBLIC_TRON_RPC_URL = process.env.NEXT_PUBLIC_TRON_RPC_URL || "https://api.trongrid.io";
 const NEXT_PUBLIC_SENDGRID_API_KEY = process.env.NEXT_PUBLIC_SENDGRID_API_KEY;
 
 interface ComponentStatus {
