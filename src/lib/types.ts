@@ -37,4 +37,3 @@ export interface BurnFormInputs {
     targetWallet: string;
     amount: string;
 }
-

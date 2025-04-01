@@ -17,7 +17,6 @@ export function isValidAddress(address: string, chain: Chain): boolean {
   }
   if (chain === 'TRON') {
     // Basic check, tronWeb.isAddress is more reliable but might require instance
-            //@ts-ignore
     return TronWeb.isAddress(address); // Requires TronWeb instance or static method availability
     // Fallback basic regex (less reliable):
     // return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);

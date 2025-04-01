@@ -2,11 +2,25 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import WalletConnectButton from '@/components/admin/WalletConnectButton';
-import ChainSelector from '@/components/admin/ChainSelector';
-import MintPanel from '@/components/admin/MintPanel';
+import dynamic from 'next/dynamic';
+
+const WalletConnectButton = dynamic(
+  () => import('@/components/admin/WalletConnectButton'),
+  { ssr: false }
+);
+const ChainSelector = dynamic(
+  () => import('@/components/admin/ChainSelector'),
+  { ssr: false }
+);
+const BurnPanel = dynamic(
+  () => import('@/components/admin/BurnPanel'),
+  { ssr: false }
+);
+const MintPanel = dynamic(
+  () => import('@/components/admin/MintPanel'),
+  { ssr: false }
+);
 import TransactionHistoryTable from '@/components/admin/TransactionHistoryTable';
-import BurnPanel from '@/components/admin/BurnPanel';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import type { Chain } from '@/lib/constants'; // Define Chain type ('BSC' | 'TRON')

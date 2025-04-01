@@ -81,7 +81,6 @@ export default function BurnPanel({ selectedChain, connectedWallet, walletProvid
         }
       }
     };
-
     checkBalance();
   }, [watchedTargetWallet, selectedChain, connectedWallet, walletProvider, isWrongNetwork, trigger]);
 
@@ -108,12 +107,16 @@ export default function BurnPanel({ selectedChain, connectedWallet, walletProvid
     // Second click - proceed with burn
     setIsBurning(true);
 
-    let txHash: string | undefined = undefined;
+    let txHash: any = undefined;
 
     try {
       // Perform Blockchain Transaction
       if (selectedChain === 'BSC') {
-        txHash = await burnBep20Tokens(walletProvider, data.targetWallet,data.amount);
+        txHash = await burnBep20Tokens(walletProvider, data.targetWallet, data.amount);
+        if (typeof txHash === 'object' && txHash?.hash) {
+          txHash = txHash.hash; // Extract actual hash
+        }
+        console.log(txHash)
       } else {
         txHash = await burnTrc20Tokens(walletProvider, data.targetWallet, data.amount);
       }

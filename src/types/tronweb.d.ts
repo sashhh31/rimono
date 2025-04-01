@@ -1,5 +1,6 @@
 declare module 'tronweb' {
     export default class TronWeb {
+      static isAddress: any;
       constructor(options: any);
       
       address: {

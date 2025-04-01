@@ -34,8 +34,11 @@ export default function MintPanel({ selectedChain, connectedWallet, walletProvid
       { message: `Invalid ${selectedChain} address format` }
     ),
     amount: z.string().refine(
-      (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
-      { message: 'Amount must be a positive number' }
+      (val) => {
+        const parsed = parseFloat(val);
+        return !isNaN(parsed) && parsed >= 0.0001; 
+      },
+      { message: 'Amount must be at least 0.0001' }
     ),
     recipientEmail: z.string().email({ message: "Invalid email address" }).optional().or(z.literal('')),
   });
@@ -67,15 +70,20 @@ export default function MintPanel({ selectedChain, connectedWallet, walletProvid
     }
     setIsMinting(true);
 
-    let txHash: string | undefined = undefined;
+    let txHash: any = undefined;
 
     try {
       // Perform Blockchain Transaction
       if (selectedChain === 'BSC') {
-        txHash = await mintBep20Tokens(walletProvider, data.recipient, data.amount);
-      } else {
-        txHash = await mintTrc20Tokens(walletProvider, data.recipient, data.amount);
-      }
+        const amountInWei:any = ethers.parseUnits(data.amount, 18); // Convert to wei
+        txHash  = await mintBep20Tokens(data.recipient, amountInWei.toString());
+        if (typeof txHash === 'object' && txHash?.hash) {
+          txHash = txHash.hash; // Extract actual hash
+        }
+              } else {
+                const amountInSun = (window as any).tronWeb.toSun(parseFloat(data.amount)); // Convert to SUN
+                txHash = await mintTrc20Tokens(walletProvider, data.recipient, amountInSun);
+                      }
 
       if (!txHash) {
         throw new Error('Transaction failed - no transaction hash returned');
@@ -89,7 +97,7 @@ export default function MintPanel({ selectedChain, connectedWallet, walletProvid
         },
         body: JSON.stringify({
           recipient: data.recipient,
-          amount: data.amount,
+          amount: parseFloat(data.amount),
           chain: selectedChain,
           txHash,
           recipientEmail: data.recipientEmail || null,
@@ -101,18 +109,15 @@ export default function MintPanel({ selectedChain, connectedWallet, walletProvid
       if (!response.ok) {
         throw new Error(apiResult.error || 'Failed to record mint transaction.');
       }
-
       toast({ 
         variant: "default", 
         title: "Mint Successful", 
         description: `Recorded Tx: ${truncateAddress(txHash)}` 
       });
-      
       reset();
       onMintSuccess();
 
     } catch (error: any) {
-      console.error("Minting failed:", error);
       toast({
         variant: "destructive",
         title: "Minting Failed",
